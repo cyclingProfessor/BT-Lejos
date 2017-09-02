@@ -56,6 +56,10 @@
         "source": "C:\\Users\\dave\\.android\\build-cache\\916fcd8b6813eb5926db0726c5d686224ce8de00\\output\\res\\layout\\abc_list_menu_item_radio.xml"
     },
     {
+        "merged": "C:\\Users\\dave\\Desktop\\BT-Lejos\\Application\\build\\intermediates\\res\\merged\\debug\\layout\\zxing_barcode_scanner.xml",
+        "source": "C:\\Users\\dave\\.android\\build-cache\\092249b77b52ec59a6e0bc6d52e1014ccc605985\\output\\res\\layout\\zxing_barcode_scanner.xml"
+    },
+    {
         "merged": "C:\\Users\\dave\\Desktop\\BT-Lejos\\Application\\build\\intermediates\\res\\merged\\debug\\layout\\notification_template_big_media_narrow.xml",
         "source": "C:\\Users\\dave\\.android\\build-cache\\916fcd8b6813eb5926db0726c5d686224ce8de00\\output\\res\\layout\\notification_template_big_media_narrow.xml"
     },
@@ -146,6 +150,10 @@
     {
         "merged": "C:\\Users\\dave\\Desktop\\BT-Lejos\\Application\\build\\intermediates\\res\\merged\\debug\\layout\\abc_action_bar_title_item.xml",
         "source": "C:\\Users\\dave\\.android\\build-cache\\916fcd8b6813eb5926db0726c5d686224ce8de00\\output\\res\\layout\\abc_action_bar_title_item.xml"
+    },
+    {
+        "merged": "C:\\Users\\dave\\Desktop\\BT-Lejos\\Application\\build\\intermediates\\res\\merged\\debug\\layout\\zxing_capture.xml",
+        "source": "C:\\Users\\dave\\.android\\build-cache\\092249b77b52ec59a6e0bc6d52e1014ccc605985\\output\\res\\layout\\zxing_capture.xml"
     },
     {
         "merged": "C:\\Users\\dave\\Desktop\\BT-Lejos\\Application\\build\\intermediates\\res\\merged\\debug\\layout\\device_name.xml",

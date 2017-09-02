@@ -18,16 +18,30 @@
 package com.example.android.bluetoothchat;
 
 import android.app.Activity;
+import android.app.Fragment;
+import android.app.FragmentManager;
+import android.content.Intent;
 import android.os.Bundle;
+import android.widget.Toast;
 
 /**
  * A simple launcher activity.
  */
 public class MainActivity extends Activity {
 
+    private BluetoothChatFragment fragment;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        Toast.makeText(this, "Found a Tag", Toast.LENGTH_SHORT).show();
+        fragment = (BluetoothChatFragment) getFragmentManager().findFragmentById(R.id.fragment_bluetooth_chat);
+        fragment.handleNFC(intent);
     }
 }

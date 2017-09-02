@@ -19,13 +19,23 @@ package com.example.android.bluetoothchat;
 import android.app.ActionBar;
 import android.app.Activity;
 import android.app.Fragment;
+import android.app.PendingIntent;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
+import android.nfc.NdefMessage;
+import android.nfc.NdefRecord;
+import android.nfc.NfcAdapter;
+import android.nfc.Tag;
+import android.nfc.tech.Ndef;
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.support.annotation.Nullable;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -37,7 +47,16 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.Toast;
+
+import com.google.zxing.ResultPoint;
+import com.google.zxing.client.android.BeepManager;
+import com.journeyapps.barcodescanner.BarcodeCallback;
+import com.journeyapps.barcodescanner.BarcodeResult;
+import com.journeyapps.barcodescanner.DecoratedBarcodeView;
+
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -48,6 +67,7 @@ public class BluetoothChatFragment extends Fragment {
     // Intent request codes
     private static final int REQUEST_CONNECT_DEVICE_INSECURE = 1;
     private static final int REQUEST_ENABLE_BT = 2;
+    public static final String MIME_TEXT_PLAIN = "text/plain";
 
     // Layout Views
     private EditText mSend;
@@ -71,19 +91,50 @@ public class BluetoothChatFragment extends Fragment {
     private BluetoothChatService mChatService = null;
     private ArrayAdapter<String> listAdapter;
 
+    private NfcAdapter nfcAdpt;
+    private PendingIntent nfcPendingIntent;
+    private IntentFilter[] intentFiltersArray;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Activity activity = getActivity();
+        Context context = activity.getApplicationContext();
+
         setHasOptionsMenu(true);
         // Get local Bluetooth adapter
         mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
 
         // If the adapter is null, then Bluetooth is not supported
         if (mBluetoothAdapter == null) {
-            Activity activity = getActivity();
             Toast.makeText(activity, "Bluetooth is not available", Toast.LENGTH_LONG).show();
             activity.finish();
         }
+
+        nfcAdpt = NfcAdapter.getDefaultAdapter(activity);
+        // Check if the smartphone has NFC
+        if (nfcAdpt == null) {
+            Toast.makeText(activity, "NFC not supported", Toast.LENGTH_LONG).show();
+            activity.finish();
+        }
+        // Check if NFC is enabled
+        if (!nfcAdpt.isEnabled()) {
+            Toast.makeText(activity, "Enable NFC before using the app", Toast.LENGTH_LONG).show();
+        }
+        Intent nfcIntent = new Intent(context, activity.getClass());
+        nfcIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+
+        nfcPendingIntent =
+                PendingIntent.getActivity(context, 0, nfcIntent, 0);
+
+        IntentFilter tagIntentFilter =
+                new IntentFilter(NfcAdapter.ACTION_NDEF_DISCOVERED);
+        try {
+            tagIntentFilter.addDataType(MIME_TEXT_PLAIN);
+        } catch (IntentFilter.MalformedMimeTypeException e) {
+            e.printStackTrace();
+        }
+        intentFiltersArray = new IntentFilter[]{tagIntentFilter};
     }
 
 
@@ -110,6 +161,13 @@ public class BluetoothChatFragment extends Fragment {
     }
 
     @Override
+    public void onPause() {
+        super.onPause();
+        barcodeView.pause();
+        nfcAdpt.disableForegroundDispatch(getActivity());
+    }
+
+    @Override
     public void onResume() {
         super.onResume();
 
@@ -123,8 +181,97 @@ public class BluetoothChatFragment extends Fragment {
                 mChatService.start();
             }
         }
+        barcodeView.resume();
+        nfcAdpt.enableForegroundDispatch(
+                    getActivity(),
+                    nfcPendingIntent,
+                    intentFiltersArray,
+                    null);
     }
 
+    public void handleNFC(Intent intent) {
+        String action = intent.getAction();
+        if (NfcAdapter.ACTION_NDEF_DISCOVERED.equals(action)) {
+
+            String type = intent.getType();
+            if (MIME_TEXT_PLAIN.equals(type)) {
+                Tag tag = intent.getParcelableExtra(NfcAdapter.EXTRA_TAG);
+
+                new NdefReaderTask().execute(tag);
+
+            }
+        }
+    }
+
+    /**
+     * Background task for reading the data. Do not block the UI thread while reading.
+     *
+     * @author Ralf Wondratschek
+     *
+     */
+    private class NdefReaderTask extends AsyncTask<Tag, Void, String> {
+
+        @Override
+        protected String doInBackground(Tag... params) {
+            Tag tag = params[0];
+
+            Ndef ndef = Ndef.get(tag);
+            if (ndef == null) {
+                // NDEF is not supported by this Tag.
+                return null;
+            }
+
+            NdefMessage ndefMessage = ndef.getCachedNdefMessage();
+
+            NdefRecord[] records = ndefMessage.getRecords();
+            for (NdefRecord ndefRecord : records) {
+                if (ndefRecord.getTnf() == NdefRecord.TNF_WELL_KNOWN && Arrays.equals(ndefRecord.getType(), NdefRecord.RTD_TEXT)) {
+                    try {
+                        Log.d("Bluetooth Lejos", "NFC Processing");
+
+                        return readText(ndefRecord);
+                    } catch (UnsupportedEncodingException e) {
+                        Log.e("Bluetooth Lejos", "Unsupported Encoding", e);
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private String readText(NdefRecord record) throws UnsupportedEncodingException {
+        /*
+         * See NFC forum specification for "Text Record Type Definition" at 3.2.1
+         *
+         * http://www.nfc-forum.org/specs/
+         *
+         * bit_7 defines encoding
+         * bit_6 reserved for future use, must be 0
+         * bit_5..0 length of IANA language code
+         */
+
+            byte[] payload = record.getPayload();
+
+            // Get the Text Encoding
+            String textEncoding = ((payload[0] & 128) == 0) ? "UTF-8" : "UTF-16";
+
+            // Get the Language Code
+            int languageCodeLength = payload[0] & 0063;
+
+            // String languageCode = new String(payload, 1, languageCodeLength, "US-ASCII");
+            // e.g. "en"
+
+            // Get the Text
+            return new String(payload, languageCodeLength + 1, payload.length - languageCodeLength - 1, textEncoding);
+        }
+
+        @Override
+        protected void onPostExecute(String result) {
+            if (result != null) {
+                sendMessage("NFC: " + result);
+            }
+        }
+    }
     @Override
     public View onCreateView(LayoutInflater inflater, @Nullable ViewGroup container,
                              @Nullable Bundle savedInstanceState) {
@@ -142,6 +289,11 @@ public class BluetoothChatFragment extends Fragment {
                 android.R.layout.simple_list_item_1,
                 receivedItems);
         mReceived.setAdapter(listAdapter);
+
+        barcodeView = (DecoratedBarcodeView) view.findViewById(R.id.barcode_scanner);
+        barcodeView.decodeContinuous(callback);
+
+        beepManager = new BeepManager(this.getActivity());
     }
 
     /**
@@ -338,4 +490,32 @@ public class BluetoothChatFragment extends Fragment {
         }
         return false;
     }
+
+    private DecoratedBarcodeView barcodeView;
+    private BeepManager beepManager;
+    private String lastText;
+
+    private BarcodeCallback callback = new BarcodeCallback() {
+        @Override
+        public void barcodeResult(BarcodeResult result) {
+            if(result.getText() == null || result.getText().equals(lastText)) {
+                // Prevent duplicate scans
+                return;
+            }
+
+            lastText = result.getText();
+            barcodeView.setStatusText(result.getText());
+            beepManager.playBeepSoundAndVibrate();
+            sendMessage(lastText);
+
+            //Added preview of scanned barcode
+            //ImageView imageView = (ImageView) findViewById(R.id.barcodePreview);
+            //imageView.setImageBitmap(result.getBitmapWithResultPoints(Color.YELLOW));
+        }
+
+        @Override
+        public void possibleResultPoints(List<ResultPoint> resultPoints) {
+        }
+    };
+
 }
