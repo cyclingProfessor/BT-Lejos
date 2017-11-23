@@ -256,7 +256,7 @@ public class BluetoothChatFragment extends Fragment {
             String textEncoding = ((payload[0] & 128) == 0) ? "UTF-8" : "UTF-16";
 
             // Get the Language Code
-            int languageCodeLength = payload[0] & 0063;
+            int languageCodeLength = payload[0] & 63;
 
             // String languageCode = new String(payload, 1, languageCodeLength, "US-ASCII");
             // e.g. "en"
